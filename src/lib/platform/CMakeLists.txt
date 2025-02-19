@@ -18,9 +18,7 @@
 if(UNIX AND NOT APPLE)
   pkg_check_modules(LIBEI REQUIRED QUIET "libei-1.0 >= ${REQUIRED_LIBEI_VERSION}")
   message(STATUS "libei version: ${LIBEI_VERSION}")
-
-  pkg_check_modules(LIBPORTAL REQUIRED QUIET "libportal >= ${REQUIRED_LIBPORTAL_VERSION}")
-  message(STATUS "libportal version: ${LIBPORTAL_VERSION}")
+  find_package(Qt6 REQUIRED COMPONENTS DBus)
 endif()
 
 if(WIN32)
@@ -149,16 +147,34 @@ elseif(UNIX)
       EiKeyState.h
       EiScreen.cpp
       EiScreen.h
+      PortalInputCapture.cpp
+      PortalInputCapture.h
+      PortalRemoteDesktop.cpp
+      PortalRemoteDesktop.h
+      PortalClipboard.cpp
+      PortalClipboard.h
     )
+
+    # Generate portal interface from dbus spec
+    set(DBUS_SPEC_FILES
+      dbus/org.freedesktop.portal.Request.xml
+      dbus/org.freedesktop.portal.Session.xml
+      dbus/org.freedesktop.portal.InputCapture.xml
+      dbus/org.freedesktop.portal.RemoteDesktop.xml
+      dbus/org.freedesktop.portal.Clipboard.xml)
+
+    qt_add_dbus_interfaces(DBUS_IFACE_FILES ${DBUS_SPEC_FILES})
+    list(APPEND PLATFORM_SOURCES ${DBUS_IFACE_FILES})
+
     # The Portal sources also require EI.
-    if(LIBPORTAL_FOUND)
-      list(APPEND PLATFORM_SOURCES
-        PortalInputCapture.cpp
-        PortalInputCapture.h
-        PortalRemoteDesktop.cpp
-        PortalRemoteDesktop.h
-      )
-    endif()
+    list(APPEND PLATFORM_SOURCES
+      XdpInputCapture.cpp
+      XdpInputCapture.h
+      XdpRemoteDesktop.cpp
+      XdpRemoteDesktop.h
+      XdpClipboard.cpp
+      XdpClipboard.h
+      XdpConversions.h)
   endif()
 endif()
 
@@ -177,10 +193,10 @@ macro(link_wayland_libs)
 
   target_link_libraries(platform ${LIBXKBCOMMON_LINK_LIBRARIES}
                         ${GLIB2_LINK_LIBRARIES} ${LIBM_LIBRARIES}
-                        ${LIBEI_LINK_LIBRARIES} ${LIBPORTAL_LINK_LIBRARIES}
+                        ${LIBEI_LINK_LIBRARIES} Qt6::DBus
   )
 
-  target_include_directories(platform PUBLIC ${LIBEI_INCLUDE_DIRS} ${LIBPORTAL_INCLUDE_DIRS})
+  target_include_directories(platform PUBLIC ${LIBEI_INCLUDE_DIRS})
 
 endmacro()
 
@@ -195,9 +211,6 @@ if(UNIX)
     ${libs})
 
   if(NOT APPLE)
-    find_package(Qt6 COMPONENTS DBus)
-    target_link_libraries(platform Qt6::DBus)
-
     link_wayland_libs()
   endif()
 endif()

@@ -103,6 +103,11 @@ macro(replace_platform_sources)
   elseif(UNIX)
     file(GLOB platform_sources ${platform_dir}/XWindows*.cpp)
     file(GLOB platform_headers ${platform_dir}/XWindows*.h)
+
+    if(LIBEI_FOUND)
+      file(GLOB platform_sources ${platform_dir}/XdpConversions*.cpp)
+      file(GLOB platform_headers ${platform_dir}/XdpConversions*.h)
+    endif()
   endif()
 
   list(APPEND sources ${platform_sources})

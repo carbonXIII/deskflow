@@ -2,6 +2,7 @@
  * Deskflow -- mouse and keyboard sharing utility
  * Copyright (C) 2022 Red Hat, Inc.
  * Copyright (C) 2024 Symless Ltd.
+ * Copyright (C) 2025 Jordan Richards
  *
  * This package is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -18,52 +19,31 @@
 
 #pragma once
 
-#include "mt/Thread.h"
 #include "platform/EiScreen.h"
+#include "platform/XdpRemoteDesktop.h"
 
-#include <glib.h>
-#include <libportal/portal.h>
+#include <memory>
 
 namespace deskflow {
 
-class PortalRemoteDesktop
+class PortalRemoteDesktop : public XdpRemoteDesktop
 {
 public:
   PortalRemoteDesktop(EiScreen *screen, IEventQueue *events);
-  ~PortalRemoteDesktop();
+  virtual ~PortalRemoteDesktop() = default;
+
+protected:
+  virtual void on_closed() override;
+  virtual void on_started(Devices, bool clipboard_enabled, std::string restore_token) override;
+
+  virtual void on_error(std::string const &msg, bool fatal) override;
+
+  void reconnect_with_timeout(std::chrono::milliseconds const &timeout);
 
 private:
-  void glib_thread(void *);
-  gboolean timeout_handler();
-  gboolean init_remote_desktop_session();
-  void cb_init_remote_desktop_session(GObject *object, GAsyncResult *res);
-  void cb_session_started(GObject *object, GAsyncResult *res);
-  void cb_session_closed(XdpSession *session);
-  void reconnect(unsigned int timeout = 1000);
-
-  /// g_signal_connect callback wrapper
-  static void cb_session_closed_cb(XdpSession *session, gpointer data)
-  {
-    reinterpret_cast<PortalRemoteDesktop *>(data)->cb_session_closed(session);
-  }
-
-  int fake_eis_fd();
-
-private:
-  EiScreen *screen_;
-  IEventQueue *events_;
-
-  Thread *glib_thread_;
-  GMainLoop *glib_main_loop_ = nullptr;
-
-  XdpPortal *portal_ = nullptr;
-  XdpSession *session_ = nullptr;
-  char *session_restore_token_ = nullptr;
-
-  guint session_signal_id_ = 0;
-
-  /// The number of successful sessions we've had already
-  guint session_iteration_ = 0;
+  EiScreen *screen;
+  IEventQueue *events;
+  std::shared_ptr<void> timer;
 };
 
 } // namespace deskflow

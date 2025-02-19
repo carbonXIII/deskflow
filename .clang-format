@@ -34,6 +34,8 @@ ColumnLimit: 120
 # Custom Breaking rules
 BreakBeforeBraces: Custom
 BraceWrapping:
+    SplitEmptyFunction: false
+    SplitEmptyRecord: false
     AfterCaseLabel: false
     AfterClass: true
     AfterControlStatement: Never
@@ -50,3 +52,4 @@ BraceWrapping:
 
 # no single line functions
 AllowShortFunctionsOnASingleLine: None
+AllowShortLambdasOnASingleLine: All

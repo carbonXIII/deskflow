@@ -22,6 +22,7 @@
 #include "deskflow/PlatformScreen.h"
 
 #include <libei.h>
+#include <memory>
 #include <mutex>
 #include <set>
 #include <vector>
@@ -33,7 +34,7 @@ struct ei_device;
 
 namespace deskflow {
 
-class EiClipboard;
+class PortalClipboard;
 class EiKeyState;
 class PortalRemoteDesktop;
 class PortalInputCapture;
@@ -85,6 +86,11 @@ public:
   void setSequenceNumber(std::uint32_t) override;
   bool isPrimary() const override;
 
+  std::uint32_t get_sequence_num()
+  {
+    return sequence_number_;
+  }
+
 protected:
   // IPlatformScreen overrides
   void handleSystemEvent(const Event &event, void *) override;
@@ -125,7 +131,7 @@ private:
   IEventQueue *events_ = nullptr;
 
   // keyboard stuff
-  EiKeyState *key_state_ = nullptr;
+  std::shared_ptr<EiKeyState> key_state_;
 
   std::vector<ei_device *> ei_devices_;
 
@@ -155,8 +161,9 @@ private:
 
   mutable std::mutex mutex_;
 
-  PortalRemoteDesktop *portal_remote_desktop_ = nullptr;
-  PortalInputCapture *portal_input_capture_ = nullptr;
+  std::shared_ptr<PortalRemoteDesktop> portal_remote_desktop_;
+  std::shared_ptr<PortalInputCapture> portal_input_capture_;
+  std::shared_ptr<PortalClipboard> clipboard;
 
   struct HotKeyItem
   {

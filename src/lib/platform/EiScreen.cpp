@@ -30,6 +30,7 @@
 #include "deskflow/XScreen.h"
 #include "platform/EiEventQueueBuffer.h"
 #include "platform/EiKeyState.h"
+#include "platform/PortalClipboard.h"
 #include "platform/PortalInputCapture.h"
 #include "platform/PortalRemoteDesktop.h"
 
@@ -56,7 +57,7 @@ EiScreen::EiScreen(bool is_primary, IEventQueue *events, bool use_portal)
       is_on_screen_(is_primary)
 {
   init_ei();
-  key_state_ = new EiKeyState(this, events);
+  key_state_ = std::make_shared<EiKeyState>(this, events);
   // install event handlers
   events_->adoptHandler(
       Event::kSystem, events_->getSystemTarget(), new TMethodEventJob<EiScreen>(this, &EiScreen::handleSystemEvent)
@@ -68,13 +69,13 @@ EiScreen::EiScreen(bool is_primary, IEventQueue *events, bool use_portal)
         new TMethodEventJob<EiScreen>(this, &EiScreen::handle_connected_to_eis_event)
     );
     if (is_primary) {
-      portal_input_capture_ = new PortalInputCapture(this, events_);
+      portal_input_capture_ = std::make_shared<PortalInputCapture>(this, events_);
     } else {
       events_->adoptHandler(
           events_->forEi().sessionClosed(), getEventTarget(),
           new TMethodEventJob<EiScreen>(this, &EiScreen::handle_portal_session_closed)
       );
-      portal_remote_desktop_ = new PortalRemoteDesktop(this, events_);
+      portal_remote_desktop_ = std::make_shared<PortalRemoteDesktop>(this, events_);
     }
   } else {
     // Note: socket backend does not support reconnections
@@ -92,11 +93,6 @@ EiScreen::~EiScreen()
   events_->removeHandler(Event::kSystem, events_->getSystemTarget());
 
   cleanup_ei();
-
-  delete key_state_;
-
-  delete portal_remote_desktop_;
-  delete portal_input_capture_;
 }
 
 void EiScreen::handle_ei_log_event(ei *ei, ei_log_priority priority, const char *message, ei_log_context *context)
@@ -170,9 +166,12 @@ void *EiScreen::getEventTarget() const
   return const_cast<void *>(static_cast<const void *>(this));
 }
 
-bool EiScreen::getClipboard(ClipboardID id, IClipboard *clipboard) const
+bool EiScreen::getClipboard(ClipboardID, IClipboard *clipboard) const
 {
-  return false;
+  if (!this->clipboard)
+    return false;
+
+  return Clipboard::copy(clipboard, this->clipboard.get());
 }
 
 void EiScreen::getShape(int32_t &x, int32_t &y, int32_t &w, int32_t &h) const
@@ -382,7 +381,18 @@ void EiScreen::leave()
 
 bool EiScreen::setClipboard(ClipboardID id, const IClipboard *clipboard)
 {
-  return false;
+  if (!this->clipboard)
+    return false;
+
+  if (!clipboard) {
+    if (!this->clipboard->open({}))
+      return false;
+    this->clipboard->empty();
+    this->clipboard->close();
+    return true;
+  } else {
+    return Clipboard::copy(this->clipboard.get(), clipboard);
+  }
 }
 
 void EiScreen::checkClipboards()
@@ -418,7 +428,7 @@ void EiScreen::setOptions(const OptionsList &options)
 
 void EiScreen::setSequenceNumber(uint32_t seqNum)
 {
-  // FIXME: what is this used for?
+  this->sequence_number_ = seqNum;
 }
 
 bool EiScreen::isPrimary() const
@@ -707,6 +717,15 @@ void EiScreen::on_abs_motion_event(ei_event *event)
 
 void EiScreen::handle_connected_to_eis_event(const Event &event, void *)
 {
+  auto get_clipboard = [this](auto &session) {
+    return PortalClipboard::get_clipboard<PortalClipboard>(session.get(), events_, this);
+  };
+  if (portal_input_capture_) {
+    clipboard = get_clipboard(portal_input_capture_);
+  } else {
+    clipboard = get_clipboard(portal_remote_desktop_);
+  }
+
   int fd = static_cast<EiConnectInfo *>(event.getData())->m_fd;
   LOG_DEBUG("eis connection established, fd=%d", fd);
 
@@ -843,7 +862,7 @@ void EiScreen::updateButtons()
 
 IKeyState *EiScreen::getKeyState() const
 {
-  return key_state_;
+  return key_state_.get();
 }
 
 std::string EiScreen::getSecureInputApp() const
